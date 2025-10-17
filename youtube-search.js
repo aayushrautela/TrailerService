@@ -1,5 +1,6 @@
 const { exec } = require('child_process');
 const { promisify } = require('util');
+const fs = require('fs');
 
 const execAsync = promisify(exec);
 
@@ -14,7 +15,10 @@ async function searchYouTubeTrailer(query) {
     
     // Use yt-dlp to search YouTube and get the YouTube URL (not direct streaming URL)
     // --get-url returns direct streaming URLs, we need --get-id to get YouTube video ID
-    const command = `yt-dlp --get-id --no-playlist "ytsearch1:${query}"`;
+    const cookiesPath = process.env.YTDLP_COOKIES;
+    const hasCookies = Boolean(cookiesPath && fs.existsSync(cookiesPath));
+    const cookiesArg = hasCookies ? ` --cookies "${cookiesPath}"` : '';
+    const command = `yt-dlp --get-id --no-playlist${cookiesArg} "ytsearch1:${query}"`;
     
     const { stdout, stderr } = await execAsync(command, { 
       timeout: 15000, // 15 second timeout

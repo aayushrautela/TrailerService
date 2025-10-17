@@ -6,12 +6,26 @@ const NodeCache = require('node-cache');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const { searchYouTubeTrailer } = require('./youtube-search');
+const fs = require('fs');
 const fetch = require('node-fetch');
 
 const execAsync = promisify(exec);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const YTDLP_COOKIES = process.env.YTDLP_COOKIES; // optional: path to cookies.txt file
+const YTDLP_EXTRACTOR_ARGS = process.env.YTDLP_EXTRACTOR_ARGS || 'youtube:player_client=android'; // optional: custom extractor args
+
+function buildYtDlpCommand(youtubeUrl) {
+  const baseFormat = 'best[height<=720][ext=mp4]/best[height<=720]/best';
+  const hasCookies = Boolean(YTDLP_COOKIES && fs.existsSync(YTDLP_COOKIES));
+  const cookiesArg = hasCookies ? ` --cookies "${YTDLP_COOKIES}"` : '';
+  // If cookies are present, prefer them and avoid forcing an extractor client that may ignore cookies
+  const extractorArgs = !hasCookies && YTDLP_EXTRACTOR_ARGS
+    ? ` --extractor-args "${YTDLP_EXTRACTOR_ARGS}"`
+    : '';
+  return `yt-dlp -f "${baseFormat}" -g --no-playlist${cookiesArg}${extractorArgs} "${youtubeUrl}"`;
+}
 
 // TMDB API configuration
 const TMDB_API_KEY = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI0MzljNDc4YTc3MWYzNWMwNTAyMmY5ZmVhYmNjYTAxYyIsIm5iZiI6MTcwOTkxMTEzNS4xNCwic3ViIjoiNjVlYjJjNWYzODlkYTEwMTYyZDgyOWU0Iiwic2NvcGVzIjpbImFwaV9yZWFkIl0sInZlcnNpb24iOjF9.gosBVl1wYUbePOeB9WieHn8bY9x938-GSGmlXZK_UVM';
@@ -167,7 +181,7 @@ app.get('/search-trailer', rateLimiterMiddleware, async (req, res) => {
     }
     
     // Now get the direct streaming URL
-    const command = `yt-dlp -f "best[height<=720][ext=mp4]/best[height<=720]/best" -g --no-playlist "${youtubeUrl}"`;
+    const command = buildYtDlpCommand(youtubeUrl);
     
     const { stdout, stderr } = await execAsync(command, { 
       timeout: 30000,
@@ -245,7 +259,7 @@ app.get('/trailer', rateLimiterMiddleware, async (req, res) => {
     
     // Use yt-dlp to get direct streaming URL
     // Prefer MP4 format, max 720p for better compatibility
-    const command = `yt-dlp -f "best[height<=720][ext=mp4]/best[height<=720]/best" -g --no-playlist "${youtube_url}"`;
+    const command = buildYtDlpCommand(youtube_url);
     
     const { stdout, stderr } = await execAsync(command, { 
       timeout: 30000, // 30 second timeout
