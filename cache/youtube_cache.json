@@ -1,0 +1,98 @@
+{
+  "tmdb_27205_movie_youtube": {
+    "youtubeUrl": "https://www.youtube.com/watch?v=JE9z-gy4De4",
+    "title": "Unknown",
+    "year": "Unknown",
+    "source": "tmdb",
+    "cached": true,
+    "timestamp": "2025-10-17T14:11:32.112Z"
+  },
+  "search_Peacemaker_2022–_youtube": {
+    "youtubeUrl": "https://www.youtube.com/watch?v=WHXq62VCaCM",
+    "title": "Peacemaker",
+    "year": "2022–",
+    "source": "youtube_search",
+    "cached": true,
+    "timestamp": "2025-10-17T14:12:58.299Z"
+  },
+  "search_Play Dirty_2025_youtube": {
+    "youtubeUrl": "https://www.youtube.com/watch?v=6paP2-ry-QY",
+    "title": "Play Dirty",
+    "year": "2025",
+    "source": "youtube_search",
+    "cached": true,
+    "timestamp": "2025-10-17T14:13:27.061Z"
+  },
+  "search_KPop Demon Hunters_2025_youtube": {
+    "youtubeUrl": "https://www.youtube.com/watch?v=AzCAwdp1uIQ",
+    "title": "KPop Demon Hunters",
+    "year": "2025",
+    "source": "youtube_search",
+    "cached": true,
+    "timestamp": "2025-10-17T14:16:39.237Z"
+  },
+  "search_Boots_2025–_youtube": {
+    "youtubeUrl": "https://www.youtube.com/watch?v=2mjN2f5tu2s",
+    "title": "Boots",
+    "year": "2025–",
+    "source": "youtube_search",
+    "cached": true,
+    "timestamp": "2025-10-17T14:16:57.272Z"
+  },
+  "search_Task_2025_youtube": {
+    "youtubeUrl": "https://www.youtube.com/watch?v=irkyXKTmY8M",
+    "title": "Task",
+    "year": "2025",
+    "source": "youtube_search",
+    "cached": true,
+    "timestamp": "2025-10-17T14:17:02.541Z"
+  },
+  "search_The Last Frontier_2025–_youtube": {
+    "youtubeUrl": "https://www.youtube.com/watch?v=Y_O7puXja-E",
+    "title": "The Last Frontier",
+    "year": "2025–",
+    "source": "youtube_search",
+    "cached": true,
+    "timestamp": "2025-10-17T14:17:40.694Z"
+  },
+  "tmdb_37501_movie_youtube": {
+    "youtubeUrl": "https://www.youtube.com/watch?v=a0VvTlKYcIY",
+    "title": "Vieni avanti cretino",
+    "year": "1982",
+    "source": "tmdb",
+    "cached": true,
+    "timestamp": "2025-10-17T14:17:56.053Z"
+  },
+  "tmdb_221079_tv_youtube": {
+    "youtubeUrl": "https://www.youtube.com/watch?v=Y_O7puXja-E",
+    "title": "The Last Frontier",
+    "year": "2025–",
+    "source": "tmdb",
+    "cached": true,
+    "timestamp": "2025-10-17T14:18:31.091Z"
+  },
+  "tmdb_911430_movie_youtube": {
+    "youtubeUrl": "https://www.youtube.com/watch?v=ge_ABjtYx88",
+    "title": "F1: The Movie",
+    "year": "2025",
+    "source": "tmdb",
+    "cached": true,
+    "timestamp": "2025-10-17T14:18:48.262Z"
+  },
+  "tmdb_95480_tv_youtube": {
+    "youtubeUrl": "https://www.youtube.com/watch?v=O9ZJChzPn0U",
+    "title": "Slow Horses",
+    "year": "2022–",
+    "source": "tmdb",
+    "cached": true,
+    "timestamp": "2025-10-17T14:19:02.590Z"
+  },
+  "tmdb_33852_tv_youtube": {
+    "youtubeUrl": "https://www.youtube.com/watch?v=W057R9MNRw4",
+    "title": "Lost Girl",
+    "year": "2010–2016",
+    "source": "tmdb",
+    "cached": true,
+    "timestamp": "2025-10-17T14:19:38.027Z"
+  }
+}

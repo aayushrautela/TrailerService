@@ -9,12 +9,11 @@
     "test": "node test.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
     "cors": "^2.8.5",
+    "express": "^4.18.2",
     "helmet": "^7.1.0",
-    "rate-limiter-flexible": "^2.4.1",
-    "node-cache": "^5.1.2",
-    "node-fetch": "^2.7.0"
+    "node-fetch": "^2.7.0",
+    "rate-limiter-flexible": "^2.4.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
@@ -22,7 +21,12 @@
   "engines": {
     "node": ">=16.0.0"
   },
-  "keywords": ["trailer", "yt-dlp", "streaming", "nuvio"],
+  "keywords": [
+    "trailer",
+    "yt-dlp",
+    "streaming",
+    "nuvio"
+  ],
   "author": "Nuvio Team",
   "license": "MIT"
 }

@@ -2,11 +2,12 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const { RateLimiterMemory } = require('rate-limiter-flexible');
-const NodeCache = require('node-cache');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const { searchYouTubeTrailer } = require('./youtube-search');
-const fs = require('fs');
+const fs = require('fs').promises;
+const fsSync = require('fs');
+const path = require('path');
 const fetch = require('node-fetch');
 
 const execAsync = promisify(exec);
@@ -18,7 +19,7 @@ const YTDLP_EXTRACTOR_ARGS = process.env.YTDLP_EXTRACTOR_ARGS || 'youtube:player
 
 function buildYtDlpCommand(youtubeUrl) {
   const baseFormat = 'best[height<=720][ext=mp4]/best[height<=720]/best';
-  const hasCookies = Boolean(YTDLP_COOKIES && fs.existsSync(YTDLP_COOKIES));
+  const hasCookies = Boolean(YTDLP_COOKIES && fsSync.existsSync(YTDLP_COOKIES));
   const cookiesArg = hasCookies ? ` --cookies "${YTDLP_COOKIES}"` : '';
   // If cookies are present, prefer them and avoid forcing an extractor client that may ignore cookies
   const extractorArgs = !hasCookies && YTDLP_EXTRACTOR_ARGS
@@ -31,11 +32,138 @@ function buildYtDlpCommand(youtubeUrl) {
 const TMDB_API_KEY = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI0MzljNDc4YTc3MWYzNWMwNTAyMmY5ZmVhYmNjYTAxYyIsIm5iZiI6MTcwOTkxMTEzNS4xNCwic3ViIjoiNjVlYjJjNWYzODlkYTEwMTYyZDgyOWU0Iiwic2NvcGVzIjpbImFwaV9yZWFkIl0sInZlcnNpb24iOjF9.gosBVl1wYUbePOeB9WieHn8bY9x938-GSGmlXZK_UVM';
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 
-// Cache configuration - cache trailer URLs for 24 hours
-const trailerCache = new NodeCache({ 
-  stdTTL: 24 * 60 * 60, // 24 hours
-  checkperiod: 60 * 60   // Check for expired keys every hour
-});
+// File-based cache configuration
+const CACHE_DIR = path.join(__dirname, 'cache');
+
+// Persistent cache class with different TTL for different data types
+class PersistentCache {
+  constructor() {
+    this.youtubeCacheFile = path.join(CACHE_DIR, 'youtube_cache.json');
+    this.streamCacheFile = path.join(CACHE_DIR, 'stream_cache.json');
+    this.youtubeCache = new Map(); // YouTube URLs - no TTL
+    this.streamCache = new Map();  // Stream URLs - with TTL
+    this.cleanupInterval = setInterval(() => this.cleanup(), 60 * 60 * 1000); // Clean every hour
+    this.loadCache();
+  }
+
+  async loadCache() {
+    try {
+      // Load YouTube cache (permanent)
+      if (await this.fileExists(this.youtubeCacheFile)) {
+        const data = JSON.parse(await fs.readFile(this.youtubeCacheFile, 'utf8'));
+        this.youtubeCache = new Map(Object.entries(data));
+      }
+
+      // Load stream cache (with TTL)
+      if (await this.fileExists(this.streamCacheFile)) {
+        const data = JSON.parse(await fs.readFile(this.streamCacheFile, 'utf8'));
+        this.streamCache = new Map(Object.entries(data));
+      }
+    } catch (error) {
+      console.error('Error loading cache:', error);
+    }
+  }
+
+  async fileExists(filePath) {
+    try {
+      await fs.access(filePath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async saveCache() {
+    try {
+      // Save YouTube cache
+      await fs.writeFile(this.youtubeCacheFile, JSON.stringify(Object.fromEntries(this.youtubeCache), null, 2));
+
+      // Save stream cache
+      await fs.writeFile(this.streamCacheFile, JSON.stringify(Object.fromEntries(this.streamCache), null, 2));
+    } catch (error) {
+      console.error('Error saving cache:', error);
+    }
+  }
+
+  // Store YouTube URL (no TTL)
+  setYouTube(key, value) {
+    this.youtubeCache.set(key, { ...value, cached: true, timestamp: new Date().toISOString() });
+    this.saveCache();
+  }
+
+  // Store streaming URL (with TTL in hours)
+  setStream(key, value, ttlHours = 6) {
+    const expiresAt = Date.now() + (ttlHours * 60 * 60 * 1000);
+    this.streamCache.set(key, {
+      ...value,
+      cached: true,
+      timestamp: new Date().toISOString(),
+      expiresAt
+    });
+    this.saveCache();
+  }
+
+  // Get YouTube URL
+  getYouTube(key) {
+    return this.youtubeCache.get(key);
+  }
+
+  // Get streaming URL (check if expired)
+  getStream(key) {
+    const entry = this.streamCache.get(key);
+    if (entry && Date.now() < entry.expiresAt) {
+      return entry;
+    }
+    if (entry) {
+      // Remove expired entry
+      this.streamCache.delete(key);
+      this.saveCache();
+    }
+    return undefined;
+  }
+
+  // Cleanup expired stream URLs
+  cleanup() {
+    const now = Date.now();
+    let cleaned = 0;
+    for (const [key, entry] of this.streamCache.entries()) {
+      if (now >= entry.expiresAt) {
+        this.streamCache.delete(key);
+        cleaned++;
+      }
+    }
+    if (cleaned > 0) {
+      console.log(`🧹 Cleaned up ${cleaned} expired cache entries`);
+      this.saveCache();
+    }
+  }
+
+  // Get cache stats
+  getStats() {
+    return {
+      youtubeKeys: this.youtubeCache.size,
+      streamKeys: this.streamCache.size,
+      totalKeys: this.youtubeCache.size + this.streamCache.size
+    };
+  }
+
+  // Get all keys for debugging
+  keys() {
+    return [
+      ...Array.from(this.youtubeCache.keys()).map(k => `youtube:${k}`),
+      ...Array.from(this.streamCache.keys()).map(k => `stream:${k}`)
+    ];
+  }
+
+  // Flush all cache
+  flushAll() {
+    this.youtubeCache.clear();
+    this.streamCache.clear();
+    this.saveCache();
+  }
+}
+
+const trailerCache = new PersistentCache();
 
 // Rate limiting - 10 requests per minute per IP
 const rateLimiter = new RateLimiterMemory({
@@ -114,12 +242,15 @@ async function getTrailerFromTMDB(tmdbId, type = 'movie') {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'healthy', 
+  const stats = trailerCache.getStats();
+  res.json({
+    status: 'healthy',
     timestamp: new Date().toISOString(),
     cache: {
-      keys: trailerCache.keys().length,
-      stats: trailerCache.getStats()
+      totalKeys: stats.totalKeys,
+      youtubeKeys: stats.youtubeKeys,
+      streamKeys: stats.streamKeys,
+      stats: stats
     }
   });
 });
@@ -146,31 +277,49 @@ app.get('/search-trailer', rateLimiterMiddleware, async (req, res) => {
       });
     }
     
-    // Create cache key
-    const cacheKey = tmdbId ? `tmdb_${tmdbId}_${type || 'movie'}` : `search_${title}_${year}`;
-    
-    // Check cache first
-    const cachedResult = trailerCache.get(cacheKey);
+    // Create cache keys
+    const streamCacheKey = tmdbId ? `tmdb_${tmdbId}_${type || 'movie'}` : `search_${title}_${year}`;
+    const youtubeCacheKey = tmdbId ? `tmdb_${tmdbId}_${type || 'movie'}_youtube` : `search_${title}_${year}_youtube`;
+
+    // Check streaming URL cache first (with TTL)
+    const cachedResult = trailerCache.getStream(streamCacheKey);
     if (cachedResult) {
-      console.log(`🎯 Cache hit for ${tmdbId ? 'TMDB' : 'search'}: ${title || tmdbId} (${year})`);
+      console.log(`🎯 Stream cache hit for ${tmdbId ? 'TMDB' : 'search'}: ${title || tmdbId} (${year})`);
       return res.json(cachedResult);
     }
     
     let youtubeUrl = null;
     
-    // Try TMDB first if tmdbId is provided
-    if (tmdbId) {
-      console.log(`🎯 Using TMDB API path for: ${tmdbId} (${type || 'movie'})`);
-      youtubeUrl = await getTrailerFromTMDB(tmdbId, type || 'movie');
+    // Check YouTube URL cache first (permanent)
+    const cachedYouTubeUrl = trailerCache.getYouTube(youtubeCacheKey);
+    if (cachedYouTubeUrl) {
+      console.log(`🎯 YouTube cache hit for ${tmdbId ? 'TMDB' : 'search'}: ${title || tmdbId} (${year})`);
+      youtubeUrl = cachedYouTubeUrl.youtubeUrl;
     } else {
-      console.log(`🔍 No TMDB ID provided, using YouTube search path`);
-    }
-    
-    // Fallback to YouTube search if TMDB fails or no tmdbId provided
-    if (!youtubeUrl && title) {
-      console.log(`🔍 Auto-searching trailer for: ${title} (${year})`);
-      const searchQuery = `${title} ${year || ''} official trailer`.trim();
-      youtubeUrl = await searchYouTubeTrailer(searchQuery);
+      // Try TMDB first if tmdbId is provided
+      if (tmdbId) {
+        console.log(`🎯 Using TMDB API path for: ${tmdbId} (${type || 'movie'})`);
+        youtubeUrl = await getTrailerFromTMDB(tmdbId, type || 'movie');
+      } else {
+        console.log(`🔍 No TMDB ID provided, using YouTube search path`);
+      }
+
+      // Fallback to YouTube search if TMDB fails or no tmdbId provided
+      if (!youtubeUrl && title) {
+        console.log(`🔍 Auto-searching trailer for: ${title} (${year})`);
+        const searchQuery = `${title} ${year || ''} official trailer`.trim();
+        youtubeUrl = await searchYouTubeTrailer(searchQuery);
+      }
+
+      // Cache the YouTube URL permanently if we found one
+      if (youtubeUrl) {
+        trailerCache.setYouTube(youtubeCacheKey, {
+          youtubeUrl,
+          title: title || 'Unknown',
+          year: year || 'Unknown',
+          source: tmdbId ? 'tmdb' : 'youtube_search'
+        });
+      }
     }
     
     if (!youtubeUrl) {
@@ -210,9 +359,9 @@ app.get('/search-trailer', rateLimiterMiddleware, async (req, res) => {
       cached: false,
       timestamp: new Date().toISOString()
     };
-    
-    // Cache the result
-    trailerCache.set(cacheKey, result);
+
+    // Cache the streaming URL with TTL (6 hours default)
+    trailerCache.setStream(streamCacheKey, result, 6);
     console.log(`✅ Successfully found and processed trailer for: ${title} (${year})`);
     
     res.json(result);
@@ -245,13 +394,13 @@ app.get('/trailer', rateLimiterMiddleware, async (req, res) => {
       });
     }
     
-    // Create cache key
-    const cacheKey = `trailer_${title}_${year}_${youtube_url}`;
-    
-    // Check cache first
-    const cachedResult = trailerCache.get(cacheKey);
+    // Create cache key for streaming URL
+    const streamCacheKey = `trailer_${title}_${year}_${youtube_url}`;
+
+    // Check streaming URL cache first (with TTL)
+    const cachedResult = trailerCache.getStream(streamCacheKey);
     if (cachedResult) {
-      console.log(`🎯 Cache hit for: ${title} (${year})`);
+      console.log(`🎯 Stream cache hit for: ${title} (${year})`);
       return res.json(cachedResult);
     }
     
@@ -287,9 +436,9 @@ app.get('/trailer', rateLimiterMiddleware, async (req, res) => {
       cached: false,
       timestamp: new Date().toISOString()
     };
-    
-    // Cache the result
-    trailerCache.set(cacheKey, result);
+
+    // Cache the streaming URL with TTL (6 hours default)
+    trailerCache.setStream(streamCacheKey, result, 6);
     console.log(`✅ Successfully fetched trailer for: ${title} (${year})`);
     
     res.json(result);
@@ -318,17 +467,25 @@ app.get('/trailer', rateLimiterMiddleware, async (req, res) => {
 
 // Get cached trailers (for debugging)
 app.get('/cache', (req, res) => {
-  const keys = trailerCache.keys();
+  const allKeys = trailerCache.keys();
   const cacheData = {};
-  
-  keys.forEach(key => {
-    cacheData[key] = trailerCache.get(key);
+
+  // Get all cached data
+  allKeys.forEach(key => {
+    if (key.startsWith('youtube:')) {
+      const actualKey = key.substring(8); // Remove 'youtube:' prefix
+      cacheData[key] = trailerCache.getYouTube(actualKey);
+    } else if (key.startsWith('stream:')) {
+      const actualKey = key.substring(7); // Remove 'stream:' prefix
+      cacheData[key] = trailerCache.getStream(actualKey);
+    }
   });
-  
+
   res.json({
-    count: keys.length,
-    keys: keys,
-    data: cacheData
+    count: allKeys.length,
+    keys: allKeys,
+    data: cacheData,
+    stats: trailerCache.getStats()
   });
 });
 
