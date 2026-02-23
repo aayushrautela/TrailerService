@@ -1,4 +1,4 @@
-
 cookies.txt
-
 node_modules/
+cache/
+.env
