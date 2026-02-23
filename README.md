@@ -1,183 +1,172 @@
-# Nuvio Trailer Server
+# TrailerService
 
-A Node.js server that converts YouTube trailer URLs to direct streaming links using yt-dlp.
+A lightweight Node.js service that converts YouTube trailer URLs into direct streaming links using yt-dlp. The server provides caching, rate limiting, security headers, and a small HTTP API for integration with client apps.
 
-## Features
+## Contents
+- Overview
+- Prerequisites
+- Installation
+- Configuration
+- API
+- Testing
+- Deployment
+- Troubleshooting
+- License
 
-- 🎬 Convert YouTube URLs to direct streaming links
-- 💾 Intelligent caching (24-hour TTL)
-- 🚦 Rate limiting (10 requests/minute per IP)
-- 🔒 Security headers with Helmet
-- 📊 Health monitoring endpoint
-- 🧪 Built-in testing suite
+## Overview
+TrailerService accepts a YouTube URL and returns a direct streaming URL suitable for client applications and media players. It uses yt-dlp to extract stream URLs and an in-memory cache to reduce repeated extraction for the same input.
+
+Features:
+- Extracts direct media links from YouTube using yt-dlp
+- Caches results (default TTL: 24 hours)
+- Rate-limits requests (default: 10 requests/min per IP)
+- Adds common security headers (Helmet)
+- Health and cache management endpoints
 
 ## Prerequisites
+- Node.js 16 or newer
+- yt-dlp installed and available in the system PATH
 
-- Node.js 16+ 
-- yt-dlp installed on your system
-
-### Install yt-dlp
-
-**macOS:**
+Install yt-dlp:
+- macOS:
 ```bash
 brew install yt-dlp
 ```
-
-**Linux:**
+- Linux / Windows (via pip):
 ```bash
 pip install yt-dlp
 ```
 
-**Windows:**
+Verify installation:
 ```bash
-pip install yt-dlp
+which yt-dlp
 ```
 
 ## Installation
-
-1. **Clone/Navigate to the server directory:**
+1. Clone the repository and change into it:
 ```bash
-cd trailer-server
+git clone <your-repo-url>
+cd TrailerService
 ```
-
-2. **Install dependencies:**
+2. Install dependencies:
 ```bash
 npm install
 ```
-
-3. **Start the server:**
+3. Start the server:
 ```bash
-# Development mode (with auto-restart)
+# Development (auto-reload)
 npm run dev
 
-# Production mode
+# Production
 npm start
 ```
 
-The server will start on `http://localhost:3001`
+By default the server listens on `http://localhost:3001`.
 
-## API Endpoints
+## Configuration
+Environment variables:
+- `PORT` — server port (default: `3001`)
+- `NODE_ENV` — `development` or `production`
 
-### GET /health
-Health check endpoint
+Check the source for additional configuration keys (cache TTL, rate limit values) if you need to customize behavior.
+
+## API
+Base URL: `http://localhost:<PORT>` (default `3001`)
+
+GET /health
+- Purpose: basic health check
+- Example:
 ```bash
 curl http://localhost:3001/health
 ```
-
-### GET /trailer
-Get direct streaming URL for a YouTube trailer
-
-**Parameters:**
-- `youtube_url` (required): YouTube URL of the trailer
-- `title` (optional): Movie/show title
-- `year` (optional): Release year
-
-**Example:**
-```bash
-curl "http://localhost:3001/trailer?youtube_url=https://www.youtube.com/watch?v=example&title=Avengers&year=2019"
-```
-
-**Response:**
+- Example response:
 ```json
 {
-  "url": "https://direct-streaming-url.com/video.mp4",
+  "status": "ok",
+  "uptime": 123.45
+}
+```
+
+GET /trailer
+- Purpose: return a direct streaming URL for a YouTube trailer
+- Query parameters:
+  - `youtube_url` (required) — full YouTube watch URL
+  - `title` (optional) — movie/show title (metadata)
+  - `year` (optional) — release year (metadata)
+- Example:
+```bash
+curl "http://localhost:3001/trailer?youtube_url=https://www.youtube.com/watch?v=EXAMPLE&title=Avengers&year=2019"
+```
+- Example response:
+```json
+{
+  "url": "https://direct-streaming-url.example/video.mp4",
   "title": "Avengers",
   "year": "2019",
   "source": "youtube",
   "cached": false,
-  "timestamp": "2023-12-01T10:00:00.000Z"
+  "timestamp": "2026-02-23T10:00:00.000Z"
 }
 ```
 
-### GET /cache
-View cached trailers (for debugging)
+GET /cache
+- Purpose: list cached trailer entries (for debugging)
 
-### DELETE /cache
-Clear all cached trailers
+DELETE /cache
+- Purpose: clear the cache
 
-## Testing
-
-Run the test suite:
-```bash
-npm test
-```
-
-This will test:
-- Health endpoint
-- Trailer fetching
-- Cache functionality
-- Rate limiting
-
-## Integration with Nuvio App
-
-Update your `TrailerService.ts` to use the local server:
-
+## Usage from a client (example)
+Example TypeScript helper that calls the local service:
 ```typescript
-// In src/services/trailerService.ts
+// src/services/trailerService.ts
 export class TrailerService {
   private static readonly BASE_URL = 'http://localhost:3001/trailer';
-  
+
   static async getTrailerUrl(title: string, year: number): Promise<string | null> {
     try {
-      // You'll need to find the YouTube URL first
+      // Implement findYouTubeTrailer to locate the YouTube URL
       const youtubeUrl = await this.findYouTubeTrailer(title, year);
       if (!youtubeUrl) return null;
-      
+
       const response = await fetch(
         `${this.BASE_URL}?youtube_url=${encodeURIComponent(youtubeUrl)}&title=${encodeURIComponent(title)}&year=${year}`
       );
-      
       if (!response.ok) return null;
-      
       const data = await response.json();
-      return data.url;
-    } catch (error) {
-      logger.error('TrailerService', 'Error fetching trailer:', error);
+      return data.url ?? null;
+    } catch (err) {
+      console.error('TrailerService error', err);
       return null;
     }
+  }
+
+  private static async findYouTubeTrailer(_title: string, _year: number): Promise<string | null> {
+    // Placeholder: implement search using YouTube API or a query
+    return null;
   }
 }
 ```
 
-## Environment Variables
-
-- `PORT`: Server port (default: 3001)
-- `NODE_ENV`: Environment (development/production)
+## Testing
+Run the test suite:
+```bash
+npm test
+```
+The tests exercise the health endpoint, trailer extraction, cache behavior, and rate limiting.
 
 ## Deployment
-
-### Netlify Functions
-1. Create `netlify/functions/trailer.js`
-2. Adapt the server code for serverless
-3. Deploy to Netlify
-
-### Vercel
-1. Create `api/trailer.js`
-2. Adapt for Vercel's serverless functions
-3. Deploy to Vercel
-
-### Railway/Render
-1. Push to GitHub
-2. Connect to Railway/Render
-3. Set environment variables
-4. Deploy
+- Serverless (Netlify / Vercel): adapt extraction into a serverless function and ensure an extraction mechanism is available at runtime (yt-dlp may not be available in all serverless runtimes).
+- Containerized hosting (Railway / Render / Docker): include yt-dlp in the container image and set environment variables accordingly.
 
 ## Troubleshooting
+- yt-dlp not found: ensure yt-dlp is installed and on PATH (`which yt-dlp`).
+- Rate limited: requests are rate-limited per IP — wait or adjust configuration.
+- Trailer not found: verify the YouTube URL is correct and the video is accessible in your region.
 
-**yt-dlp not found:**
-- Ensure yt-dlp is installed and in PATH
-- Try: `which yt-dlp` to verify installation
-
-**Rate limited:**
-- Wait 1 minute or clear cache
-- Check rate limiting settings
-
-**Trailer not found:**
-- Verify YouTube URL is valid
-- Check if video is available in your region
-- Try different quality settings
+## Contributing
+- Open issues for bugs or feature requests and create pull requests with tests when possible.
 
 ## License
-
 MIT
-# TrailerService
+
+(End)
