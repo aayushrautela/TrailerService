@@ -1,4 +1,5 @@
 cookies.txt
 node_modules/
+package-lock.json
 cache/
 .env
